@@ -23,6 +23,7 @@ dist-ssr
 *.sln
 *.sw?
 
+# Add these lines if missing
 .history/
 node_modules/
 dist/
