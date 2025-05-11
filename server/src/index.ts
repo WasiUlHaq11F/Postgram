@@ -10,6 +10,7 @@ import { loginRouter } from "./routes/loginRoute"
 import { postRouter } from "./controllers/postContoller"
 import commentRouter from "./controllers/commentController"
 import { logoutRouter } from "./controllers/logoutcontroller"
+import cookieParser from "cookie-parser"
 const main = async () => {
     const app = express()
 
@@ -29,6 +30,7 @@ const main = async () => {
             origin: " http://localhost:5173",
             credentials: true
         }))
+        app.use(cookieParser())
         app.use(express.json())
         app.use('/register',registerRouter)
         app.use('/login',loginRouter)

@@ -38,15 +38,14 @@ loginRouter.post('/',async (req,res): Promise<any> => {
 
         //setup jwts. 
         const secret = process.env.JWT_SECRET as string
-        
+        const token = jwt.sign({userid:user.user_id}, secret, {expiresIn:'1hr'})
 
-        res.cookie('jwt', {
+        res.cookie('jwt', token, {
             httpOnly: true,
-            secure: process.env.Node_ENV === 'production',
-            sameSite: "strict",
-            maxAge: 60 * 60 * 1000 
-        })
-       
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 60 * 60 * 1000
+        });
     return res.status(200).json({
         "success": true,
          user : {

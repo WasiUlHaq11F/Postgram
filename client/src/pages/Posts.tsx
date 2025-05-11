@@ -1,24 +1,22 @@
 import axios from "axios";
 import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
-import { FaThumbsUp } from "react-icons/fa6";
+import { FaThumbsUp, FaTrash, FaReply, FaComment } from "react-icons/fa6";
 import type { commentTypes, postTypes } from "../types/PostTypes";
+import { useNavigate } from "react-router";
 
 function Posts() {
-  const { user } = useAuth();
-
+  const { user, isAuthenticated } = useAuth();
   const [post, setPost] = useState<postTypes[]>([]);
-
   const [comments, setComments] = useState<{ [key: number]: any[] }>({});
-
   const [editingPost, setEditingPost] = useState<postTypes | null>(null);
-
   const [editTitle, setEditTitle] = useState("");
-
   const [editBody, setEditBody] = useState("");
-
   const [likedPosts, setLikedPosts] = useState<number[]>([]);
+  const [showCommentForm, setShowCommentForm] = useState<{ [key: number]: boolean }>({});
+  const [replyingTo, setReplyingTo] = useState<number | null>(null);
 
+  const navigation = useNavigate();
 
   useEffect(() => {
     async function fetchallPosts() {
@@ -32,31 +30,37 @@ function Posts() {
     }
 
     fetchallPosts();
-  }, []);
+  }, [post]);
 
   useEffect(() => {
-    const fetchComments = async (postId: number) => {
-      try {
-        const res = await axios.get(`http://localhost:8000/comments/${postId}`, {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        });
-        // Update only the comments for this specific post
-        setComments(prevComments => ({
-          ...prevComments,
-          [postId]: Array.isArray(res.data) ? res.data : []
-        }));
-      } catch (error) {
-        console.error("Error fetching comments:", error);
-      } 
+    if (post.length === 0) return;
+  
+    const fetchAllComments = async () => {
+      for (const p of post) {
+        try {
+          const res = await axios.get(`http://localhost:8000/comments/${p.id}`, {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+          });
+          setComments(prev => ({
+            ...prev,
+            [p.id]: Array.isArray(res.data) ? res.data : [],
+          }));
+        } catch (error) {
+          console.error("Error fetching comments:", error);
+        }
+      }
     };
+  
+    fetchAllComments();
+  }, [post]);
 
-    // Fetch comments for each post
-    post.forEach((post) => fetchComments(post.id));
-  }, [post]); // Fetch comments when posts change
-
-
+  // useEffect(() => {
+  //   if (!isAuthenticated) {
+  //     navigation("/login", { replace: true });
+  //   }
+  // }, [isAuthenticated, navigation]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -68,14 +72,12 @@ function Posts() {
         body: formData.body,
         user: user,
       });
-      console.log("Response from the Server: ", res.data);
       setPost((prevPost) => [...prevPost, res.data]);
-      console.log(post);
+      form.reset();
     } catch (error) {
       console.log("Error Uploading the Post");
       console.error(error);
     }
-    form.reset();
   }
 
   async function handleEditPost(postId: number) {
@@ -113,7 +115,6 @@ function Posts() {
       setEditBody("");
     } catch (error) {
       console.error("Error updating post:", error);
-      alert("Error Updating the Post");
     }
   }
 
@@ -135,7 +136,6 @@ function Posts() {
       setPost((prevPosts) => prevPosts.filter((p) => p.id !== postId));
     } catch (error) {
       console.error("Error deleting post:", error);
-      alert("Error Deleting Post");
     }
   }
 
@@ -148,14 +148,12 @@ function Posts() {
         }
       );
 
-      // Update the post's like count
       setPost((prevPosts) =>
         prevPosts.map((p) =>
           p.id === postId ? { ...p, likesCount: response.data.likesCount } : p
         )
       );
 
-      // Update the liked status in our local state
       if (response.data.liked) {
         setLikedPosts((prev) => [...prev, postId]);
       } else {
@@ -166,36 +164,26 @@ function Posts() {
     }
   }
 
-  // Check if the current user has liked a post
   const isPostLiked = (postId: number) => {
     return likedPosts.includes(postId);
   };
 
-   
   const handleDeleteComment = async (postId: number, commentId: number) => {
     try {
-      const token = localStorage.getItem("token");
-  
-      if (!token) {
-        alert("You need to be logged in to delete a comment.");
-        return;
-      }
-  
-      // Send DELETE request to the backend
       await axios.delete(`http://localhost:8000/comments/${commentId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`, 
-        },
+        withCredentials: true,
       });
-  
-      // Update local state after deletion
+      
       setComments(prev => ({
         ...prev,
         [postId]: prev[postId].filter(comment => comment.id !== commentId),
       }));
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error deleting comment:", error);
-      alert("Error Deleting Comment");
+      if (error.response) {
+        console.error("Status:", error.response.status);
+        console.error("Response data:", error.response.data);
+      }
     }
   };
 
@@ -205,80 +193,108 @@ function Posts() {
     const formData = new FormData(form);
     const content = formData.get('content') as string;
   
-    console.log("Adding comment to post:", postId, "with parentId:", parentId);
-  
     try {
       const res = await axios.post(
         `http://localhost:8000/comments/${postId}`,
         { 
           content, 
           parentId,
-          user // Pass the current user object
+          user
         },
         {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
+          withCredentials: true
         }
       );
-  
-      console.log("Comment added successfully:", res.data);
       
-      // Update the comments state with the new comment
       setComments(prev => ({
         ...prev,
         [postId]: [...(prev[postId] || []), res.data],
       }));
   
       form.reset();
+      setReplyingTo(null);
     } catch (error) {
       console.error("Error adding comment:", error);
-      if (axios.isAxiosError(error)) {
-        console.error("Response data:", error.response?.data);
-      }
     }
   };
   
+  const toggleCommentForm = (postId: number) => {
+    setShowCommentForm(prev => ({
+      ...prev,
+      [postId]: !prev[postId]
+    }));
+  };
 
   const renderComments = (comments: commentTypes[], postId: number, parentId: number | null = null) => {
-    // Filter comments that belong to the specified parent
     const filteredComments = comments.filter(comment => comment.parentId === parentId);
-    
-    console.log(`Rendering ${filteredComments.length} comments for parent:`, parentId);
     
     if (filteredComments.length === 0) {
       return null;
     }
     
     return filteredComments.map(comment => (
-      <div key={comment.id} className="mt-3 border  rounded-lg p-4">
-        <p className="text-sm text-orange-400">Author: {comment.author.email}</p>
-        <p className="mt-2">{comment.body}</p>
-        <button
-          onClick={() => handleDeleteComment(postId, comment.id)}
-          className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600"
-        >
-          Delete Comment
-        </button>
-        {/* Reply form */}
-        <form onSubmit={(e) => handleComments(e, postId, comment.id)}>
-          <input 
-            className="mt-2 bg-gray-500 p-3 rounded w-full" 
-            type="text" 
-            name="content" 
-            placeholder="Reply to this comment" 
-            required 
-          />
-          <button 
-            type="submit" 
-            className="mt-2 bg-orange-400 p-2 rounded-lg hover:bg-orange-500"
+      <div key={comment.id} className="mt-4 border border-gray-700 rounded-lg p-4 bg-gray-800">
+        <div className="flex justify-between items-center mb-2">
+          <p className="text-sm text-indigo-400 font-medium">
+            {comment.author.email}
+          </p>
+          <span className="text-xs text-gray-400">
+            {new Date().toLocaleDateString()}
+          </span>
+        </div>
+        
+        <p className="text-gray-200 mb-3">{comment.body}</p>
+        
+        <div className="flex gap-3 mt-2">
+          <button
+            onClick={() => setReplyingTo(replyingTo === comment.id ? null : comment.id)}
+            className="flex items-center gap-1 text-xs px-2 py-1 bg-indigo-900 text-indigo-200 rounded hover:bg-indigo-800 transition-colors"
           >
-            Reply
+            <FaReply size={12} /> Reply
           </button>
-        </form>
+          
+          <button
+            onClick={() => handleDeleteComment(postId, comment.id)}
+            className="flex items-center gap-1 text-xs px-2 py-1 bg-red-900 text-red-200 rounded hover:bg-red-800 transition-colors"
+          >
+            <FaTrash size={12} /> Delete
+          </button>
+        </div>
+        
+        {replyingTo === comment.id && (
+          <form 
+            onSubmit={(e) => handleComments(e, postId, comment.id)}
+            className="mt-3 flex flex-col gap-2"
+          >
+            <div className="relative">
+              <input 
+                className="w-full bg-gray-700 border border-gray-600 p-2 rounded text-white focus:outline-none focus:border-indigo-500 text-sm pl-3" 
+                type="text" 
+                name="content" 
+                placeholder="Reply to this comment" 
+                required 
+              />
+            </div>
+            
+            <div className="flex gap-2">
+              <button 
+                type="submit" 
+                className="text-xs px-3 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors"
+              >
+                Post Reply
+              </button>
+              <button 
+                type="button"
+                onClick={() => setReplyingTo(null)} 
+                className="text-xs px-3 py-1 bg-gray-700 text-gray-300 rounded hover:bg-gray-600 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
   
-        {/* Render child comments (replies) with increased left margin */}
-        <div className="ml-8 mt-3">
+        <div className="ml-6 pl-4 border-l border-gray-700 mt-3">
           {renderComments(comments, postId, comment.id)}
         </div>
       </div>
@@ -286,172 +302,220 @@ function Posts() {
   };
 
   const posts = post.map((item) => (
-    <div key={item.id} className="border border-1  m-4 p-4">
+    <div key={item.id} className="mb-8 bg-gray-900 rounded-xl shadow-lg overflow-hidden">
       {editingPost && editingPost.id === item.id ? (
-        <div className="edit-form">
-          <h2 className="text-2xl text-orange-400">Edit Post</h2>
-          <div className="mt-4">
-            <label className="text-orange-500" htmlFor="edit-title">
-              Title:
-            </label>
-            <input
-              className="w-full bg-gray-500 p-2 mt-1"
-              type="text"
-              id="edit-title"
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-            />
-          </div>
-          <div className="mt-4">
-            <label className="text-orange-500" htmlFor="edit-body">
-              Body:
-            </label>
-            <textarea
-              className="w-full bg-gray-500 p-2 mt-1"
-              id="edit-body"
-              value={editBody}
-              onChange={(e) => setEditBody(e.target.value)}
-            />
-          </div>
-          <div className="mt-4 flex gap-4">
-            <button
-              onClick={handleSaveEdit}
-              className="px-2 py-2 bg-green-500 text-white rounded hover:bg-green-600"
-            >
-              Save
-            </button>
-            <button
-              onClick={handleCancelEdit}
-              className="px-2 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-            >
-              Cancel
-            </button>
+        <div className="p-6">
+          <h2 className="text-xl font-bold text-indigo-400 mb-4">Edit Post</h2>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-indigo-300 mb-1" htmlFor="edit-title">
+                Title
+              </label>
+              <input
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                type="text"
+                id="edit-title"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-indigo-300 mb-1" htmlFor="edit-body">
+                Content
+              </label>
+              <textarea
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white h-32 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                id="edit-body"
+                value={editBody}
+                onChange={(e) => setEditBody(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-4">
+              <button
+                onClick={handleSaveEdit}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2"
+              >
+              Save Changes
+              </button>
+              <button
+                onClick={handleCancelEdit}
+                className="px-4 py-2 bg-gray-700 text-gray-200 rounded-lg hover:bg-gray-600 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       ) : (
         <>
-          <p className="text-sm text-orange-400">Author: {item.authorEmail}</p>
-          <h1 className="mt-4 text-3xl">Title: {item.title}</h1>
-          <p className="mt-6 text-sm">Body: {item.body}</p>
+          <div className="p-6">
+            <div className="flex justify-between items-center mb-3">
+              <p className="text-sm text-indigo-400 font-medium">
+                {item.authorEmail}
+              </p>
+              <span className="text-xs text-gray-400">
+                {new Date().toLocaleDateString()}
+              </span>
+            </div>
+            
+            <h2 className="text-2xl font-bold text-white mb-3">{item.title}</h2>
+            <p className="text-gray-300 mb-6 whitespace-pre-wrap">{item.body}</p>
 
-          <div className="mt-6 flex gap-4">
-            <button
-              onClick={() => handleEditPost(item.id)}
-              className="px-2 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-            >
-              Edit Post
-            </button>
-            <button
-              onClick={() => handleDelete(item.id)}
-              className="px-2 py-2 bg-red-500 text-white rounded hover:bg-red-600"
-            >
-              Delete Post
-            </button>
-            <button
-              onClick={() => handleLikePost(item.id)}
-              className={`flex items-center gap-2 px-3 py-2 rounded ${
-                isPostLiked(item.id)
-                  ? "bg-orange-500 text-white hover:bg-orange-600"
-                  : "bg-gray-600 text-white hover:bg-gray-700"
-              }`}
-            >
-              <FaThumbsUp size={16} />
-              <span>{item.likesCount}</span>
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => handleLikePost(item.id)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
+                  isPostLiked(item.id)
+                    ? "bg-indigo-700 text-white hover:bg-indigo-800"
+                    : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                }`}
+              >
+                <FaThumbsUp size={14} />
+                <span>{item.likesCount || 0}</span>
+              </button>
+              
+              <button
+                onClick={() => toggleCommentForm(item.id)}
+                className="flex items-center gap-2 px-3 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                <FaComment size={14} />
+                <span>Comment</span>
+              </button>
+              
+              <button
+                onClick={() => handleEditPost(item.id)}
+                className="flex items-center gap-2 px-3 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                <span>Edit</span>
+              </button>
+              
+              <button
+                onClick={() => handleDelete(item.id)}
+                className="flex items-center gap-2 px-3 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                <FaTrash size={14} />
+                <span>Delete</span>
+              </button>
+            </div>
           </div>
-          <form className="flex flex-col mt-16" onSubmit={(e) => handleComments(e, item.id)}>
-            <label className="text-orange-500" htmlFor="comment">
-              Comments:
-            </label>
-            <input
-              className="m-4 w-250 rounded-lg bg-blue-200 text-black rounded-lg p-4"
-              type="text"
-              name="content"
-              id="comment"
-              placeholder="Enter your comment"
-              required
-            />
-            <button className="flex items-center justify-center rounded-lg cursor-pointer m-16 text-center mt-4  bg-blue-200 p-3">
-              Add Comment
-            </button>
-          </form>
-          <ul className="list-disc pl-5">
-            {comments[item.id]?.map(
-              (comment: {
-                id: number;
-                author: { email: string };
-                body: string;
-              }) => (
-                <div  key={comment.id} className="mt-3 border-1 border-orange-300 rounded-lg p-4">
-                  <p className="text-sm text-orange-400 mt-2">
-                    Author: {comment.author.email}
-                  </p>{" "}
-                  <p className="mt-2 font-bold">{comment.body}</p>
-                  <form onSubmit={(e) => handleComments(e, item.id, comment.id)}>
-                    <input
-                      className="m-4 bg-blue-200 text-black rounded-lg p-4"
-                      type="text"
-                      name="content"
-                      placeholder="Reply to this comment"
-                      required
-                    />
-                    <button type="submit" className="bg-orange-400 p-3 rounded-lg">Reply</button>
-                  </form>
-                  {/* Render replies (nested comments) */}
-                  <div style={{ marginLeft: "20px" }}>
-                    {renderComments(comments[item.id] || [], item.id, comment.id)}  
-                    </div>
+          
+          {showCommentForm[item.id] && (
+            <form 
+              className="px-6 py-4 bg-gray-800 border-t border-gray-700" 
+              onSubmit={(e) => handleComments(e, item.id)}
+            >
+              <div className="flex items-center space-x-3">
+                <div className="flex-grow">
+                  <input
+                    className="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    type="text"
+                    name="content"
+                    placeholder="Write a comment..."
+                    required
+                  />
                 </div>
-              )
-            )}
-          </ul>
-
+                <button 
+                  type="submit" 
+                  className="px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2"
+                >
+                  <FaComment size={14} />
+                  Comment
+                </button>
+              </div>
+            </form>
+          )}
+          
+          {comments[item.id]?.length > 0 && (
+            <div className="px-6 py-4 bg-gray-800 border-t border-gray-700">
+              <div className="mb-3 flex items-center">
+                <h3 className="text-lg font-medium text-white">Comments</h3>
+                <span className="ml-2 text-sm bg-indigo-900 text-indigo-200 px-2 py-0.5 rounded-full">
+                  {comments[item.id]?.filter(c => !c.parentId).length}
+                </span>
+              </div>
+              
+              <div className="space-y-4">
+                {renderComments(comments[item.id] || [], item.id, null)}
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>
   ));
 
   return (
-    <div className="flex flex-col p-4 mt-16 font-bold text-white w-full">
-      <form
-        className="p-4 flex flex-col border-1 rounded-lg "
-        onSubmit={handleSubmit}
-      >
-        <h1 className="text-white text-2xl text-center">Add a post</h1>
-
-        <label className="text-orange-500" id="title" htmlFor="title">
-          Title:
-        </label>
-        <input
-          className="m-4 p-4 bg-blue-200 text-black rounded-lg "
-          type="text"
-          name="title"
-          id="title"
-          placeholder="Enter the title"
-          required
-        />
-
-        <label className="mt-4 text-orange-500 text-lg" htmlFor="body">
-          Body:
-        </label>
-        <textarea
-          className="m-4 bg-blue-200 p-4 text-sm rounded-lg text-black"
-          name="body"
-          id="body"
-          placeholder={`What's on your Mind....`}
-          required
-        />
-
-        <button className="flex items-center justify-center rounded-lg cursor-pointer text-center mt-4 p-3 bg-blue-200">
-          Add Post
-        </button>
-      </form>
-      <h1 className="text-5xl text-orange-500 mt-16">Posts: </h1>
-      {posts}
+    <div className="min-h-screen bg-gray-950 text-white w-full">
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <div className="mb-10 bg-gray-900 rounded-xl shadow-lg overflow-hidden">
+          <div className="p-6">
+            <h1 className="text-2xl font-bold text-white mb-6">Create a Post</h1>
+            
+            <form
+              className="space-y-4"
+              onSubmit={handleSubmit}
+            >
+              <div>
+                <label className="block text-sm font-medium text-indigo-300 mb-1" htmlFor="title">
+                  Title
+                </label>
+                <input
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  type="text"
+                  name="title"
+                  id="title"
+                  placeholder="Enter a title for your post"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-indigo-300 mb-1" htmlFor="body">
+                  Content
+                </label>
+                <textarea
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white h-32 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  name="body"
+                  id="body"
+                  placeholder="What's on your mind?"
+                  required
+                />
+              </div>
+              
+              <button 
+                type="submit"
+                className="w-full py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors"
+              >
+                Publish Post
+              </button>
+            </form>
+          </div>
+        </div>
+        
+        <div className="flex items-center mb-6">
+          <h2 className="text-2xl font-bold text-indigo-400">Posts</h2>
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-sm text-gray-400">Sort by:</span>
+            <select className="bg-gray-800 text-white border border-gray-700 rounded-lg px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option>Latest</option>
+              <option>Most liked</option>
+              <option>Most commented</option>
+            </select>
+          </div>
+        </div>
+        
+        {posts.length === 0 ? (
+          <div className="text-center py-16 bg-gray-900 rounded-xl">
+            <p className="text-gray-400">No posts yet. Be the first to share something!</p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {posts}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
 export default Posts;
-
-

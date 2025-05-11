@@ -1,19 +1,14 @@
-import  { useEffect } from "react";
-import { useAuth } from "../context/AuthContext"; // Make sure path is correct
-import '../index.css'
+import { useEffect } from "react";
+import { useAuth } from "../context/AuthContext"; // Ensure path is correct
+import '../index.css';
 
 function Navbar() {
-  
   const { user, logout } = useAuth();
 
-  // Debug user data when component mounts and when user changes
   useEffect(() => {
     console.log("Navbar mounted, auth state:", { user });
-    
-    // Check localStorage directly
+
     const localStorageUser = localStorage.getItem('user');
-    // console.log("User from localStorage:", localStorageUser);
-    
     if (localStorageUser) {
       try {
         const parsedUser = JSON.parse(localStorageUser);
@@ -25,39 +20,41 @@ function Navbar() {
     }
   }, [user]);
 
-  function handleLogOut() {
+  const handleLogOut = () => {
     console.log("Logout clicked");
     logout();
-  }
+  };
 
   const toggleTheme = () => {
     document.body.classList.toggle('light');
   };
 
   return (
-    <div className="flex  w-full p-4 justify-between">
-      <h1 className="text-5xl">Postgram</h1>
+    <nav className="w-full bg-gray-800 text-white shadow-md p-4 flex justify-between items-center">
+      <h1 className="text-3xl font-bold">Postgram</h1>
 
-      <div className="flex flex-col items-end">    
-      <button className="rounded-md mb-2 p-2 bg-blue-500 text-black cursor-pointer" onClick={toggleTheme}>
-                Toggle Theme
-          </button> 
-        {user && 
+      <div className="flex flex-col items-end space-y-2">
+        <button 
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md text-white transition"
+          onClick={toggleTheme}
+        >
+          Toggle Theme
+        </button>
+
+        {user && (
           <>
-            <p className="text-center mt-3">
-              {user.email || "No email found"}
-            </p>
+            <p className="text-sm">{user.email || "No email found"}</p>
 
             <button
               onClick={handleLogOut}
-              className="p-2 mt-2 rounded-lg text-center bg-red-500 text-black cursor-pointer"
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-md text-white transition"
             >
               Log Out
             </button>
           </>
-       }
+        )}
       </div>
-    </div>
+    </nav>
   );
 }
 

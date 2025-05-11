@@ -1,10 +1,6 @@
 @import "tailwindcss";
 
-@font-face {
-    font-family: "MyRetroFont";
-    src: url("./utils/fonts/GAMEPAUSEDDEMOREGULAR-RPMY6.OTF");
-  }
-  
+
   body {
     background-color: #1a1a1b;
     font-family: "MyRetroFont", sans-serif;

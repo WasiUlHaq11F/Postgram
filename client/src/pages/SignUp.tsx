@@ -29,6 +29,10 @@ function SignUp() {
     }
     
   }
+
+  function handleClick(){
+    navigation("/")
+  }
    
   return (
     <div className="flex mt-16 border-1 items-center justify-center border-orange-400 w-2xl rounded-lg ">
@@ -58,7 +62,7 @@ function SignUp() {
         />
 
         <button className="p-4 m-4 bg-orange-400 rounded-lg" onClick={handleSignUp}>Sign Up</button>
-        <p className="mt-10 text-center text-sm boder-1 border-b border-orange-300 text-orange-500 cursor-pointer">Already have an Account? Login</p>
+        <p className="mt-10 text-center text-sm boder-1 border-b border-orange-300 text-orange-500 cursor-pointer" onClick={handleClick}>Already have an Account? Login</p>
       </div>
     </div>
   );

@@ -50,11 +50,6 @@ postRouter.get('/', async (req,res) => {
         authorEmail: post.author.email
     }));
      res.json(response);
- 
-
-    res.json(response)
-
-
     }catch(error){
         console.error("Error")
         console.log(error)
