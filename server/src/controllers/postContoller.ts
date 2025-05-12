@@ -1,7 +1,7 @@
 import express from "express"
 import { Post } from "../entities/Post";
 import { getRepository, getTreeRepository } from "typeorm";
-import { User } from "src/entities/User";
+import { User } from "../entities/User";
 import { Comment } from "../entities/Comment";
 import jwt from 'jsonwebtoken'; 
 const postRouter = express.Router();
@@ -47,7 +47,8 @@ postRouter.get('/', async (req,res) => {
         id: post.id,
         title: post.title,
         body: post.body,
-        authorEmail: post.author.email
+        authorEmail: post.author.email,
+        likesCount: post.likesCount || 0 
     }));
      res.json(response);
     }catch(error){
@@ -105,8 +106,8 @@ postRouter.post('/:id/like', async (req, res): Promise<any> => {
         const { user } = req.body;
         
         // Find post and user
-        const postRepository = getRepository("Post");
-        const userRepository = getRepository("User");
+        const postRepository = getRepository(Post);
+        const userRepository = getRepository(User);
         
         const post = await postRepository.findOne({
             where: { id: postId },
@@ -125,15 +126,14 @@ postRouter.post('/:id/like', async (req, res): Promise<any> => {
             return res.status(404).json({ message: "User not found" });
         }
         
-        // Check if user already liked this post
-        const alreadyLiked = post.likedBy.some((likedUser: User) => likedUser.user_id === currentUser.id);
-
+        // Check if user already liked this post - fix the property comparison
+        const alreadyLiked = post.likedBy.some((likedUser: User) => likedUser.user_id === currentUser.user_id);
         
         if (alreadyLiked) {
             // Unlike: Remove user from likedBy and decrement count
-            post.likedBy = post.likedBy.filter((likedUser: User) => likedUser.user_id !== currentUser.id);
+            post.likedBy = post.likedBy.filter((likedUser: User) => likedUser.user_id !== currentUser.user_id);
             post.likesCount = Math.max(0, post.likesCount - 1); // Ensure count doesn't go below 0
-            await post.save();
+            await postRepository.save(post);
             
             return res.json({
                 id: post.id,
@@ -144,7 +144,7 @@ postRouter.post('/:id/like', async (req, res): Promise<any> => {
             // Like: Add user to likedBy and increment count
             post.likedBy.push(currentUser);
             post.likesCount += 1;
-            await post.save();
+            await postRepository.save(post);
             
             return res.json({
                 id: post.id,

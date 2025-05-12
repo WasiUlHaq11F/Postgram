@@ -97,7 +97,7 @@ commentRouter.delete('/:commentId', async (req: Request, res: Response): Promise
     console.log(`Attempting to delete comment ID: ${commentId}`);
     
     // Check if cookies are being received
-    console.log('Cookies received:', req.cookies);
+    // console.log('Cookies received:', req.cookies);
     
     const user = await getUserFromToken(req);
     console.log('User from token:', user ? `ID: ${user.user_id}, Email: ${user.email}` : 'No user found');
@@ -109,21 +109,21 @@ commentRouter.delete('/:commentId', async (req: Request, res: Response): Promise
       relations: ['author', 'post'],
     });
     
-    console.log('Comment found:', comment ? `ID: ${comment.id}, Author ID: ${comment.author.user_id}` : 'No comment found');
+    // console.log('Comment found:', comment ? `ID: ${comment.id}, Author ID: ${comment.author.user_id}` : 'No comment found');
     
     if (!comment) return res.status(404).json({ message: 'Comment not found' });
 
-    console.log(`Comparing user ID ${user.user_id} with comment author ID ${comment.author.user_id}`);
+    // console.log(`Comparing user ID ${user.user_id} with comment author ID ${comment.author.user_id}`);
     if (comment.author.user_id !== user.user_id) {
       console.log('User ID mismatch - not the comment owner');
       return res.status(403).json({ message: 'You can only delete your own comments' });
     }
 
-    console.log('Proceeding with comment deletion');
+    // console.log('Proceeding with comment deletion');
     await getRepository(Comment).remove(comment);
     return res.status(200).json({ message: 'Comment deleted successfully' });
   } catch (error) {
-    console.error('Error deleting comment:', error);
+    // console.error('Error deleting comment:', error);
     return res.status(500).json({ message: 'Failed to delete comment' });
   }
 });

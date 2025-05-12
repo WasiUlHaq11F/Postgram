@@ -7,7 +7,7 @@ import { useNavigate } from "react-router";
 
 function Posts() {
   const { user, isAuthenticated } = useAuth();
-  const [post, setPost] = useState<postTypes[]>([]);
+  const [posts, setPosts] = useState<postTypes[]>([]);
   const [comments, setComments] = useState<{ [key: number]: any[] }>({});
   const [editingPost, setEditingPost] = useState<postTypes | null>(null);
   const [editTitle, setEditTitle] = useState("");
@@ -15,64 +15,93 @@ function Posts() {
   const [likedPosts, setLikedPosts] = useState<number[]>([]);
   const [showCommentForm, setShowCommentForm] = useState<{ [key: number]: boolean }>({});
   const [replyingTo, setReplyingTo] = useState<number | null>(null);
-
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [loading, setLoading] = useState(true);
   const navigation = useNavigate();
 
   useEffect(() => {
-    async function fetchallPosts() {
+    async function fetchAllPosts() {
+      setLoading(true);
       try {
+        // Fetch all posts
         const res = await axios.get("http://localhost:8000/posts");
-        setPost(res.data);
+        
+        // Ensure all posts have a likesCount (default to 0 if missing)
+        interface PostWithLikeCounts extends postTypes {
+          likesCount: number;
+        }
+
+        const postsWithLikeCounts: PostWithLikeCounts[] = res.data.map((post: postTypes) => ({
+          ...post,
+          likesCount: typeof post.likesCount === 'number' ? post.likesCount : 0
+        }));
+        
+        setPosts(postsWithLikeCounts);
+        
+        // Then fetch liked status if authenticated
+        if (isAuthenticated) {
+          try {
+            const likedResponse = await axios.get("http://localhost:8000/posts/liked", {
+              headers: {
+                Authorization: `Bearer ${localStorage.getItem("token")}`,
+              },
+            });
+            
+            if (Array.isArray(likedResponse.data)) {
+              setLikedPosts(likedResponse.data);
+            }
+          } catch (error) {
+            console.error("Error fetching liked posts:", error);
+          }
+        }
       } catch (error) {
-        console.error("Error");
-        console.log(error);
+        console.error("Error fetching posts:", error);
+      } finally {
+        setLoading(false);
       }
     }
-
-    fetchallPosts();
-  }, [post]);
-
+  
+    fetchAllPosts();
+  }, [refreshTrigger, isAuthenticated]);
+  // Fetch comments when posts change
   useEffect(() => {
-    if (post.length === 0) return;
+    if (posts.length === 0) return;
   
     const fetchAllComments = async () => {
-      for (const p of post) {
+      const newComments = { ...comments };
+      
+      for (const p of posts) {
         try {
           const res = await axios.get(`http://localhost:8000/comments/${p.id}`, {
             headers: {
               Authorization: `Bearer ${localStorage.getItem("token")}`,
             },
           });
-          setComments(prev => ({
-            ...prev,
-            [p.id]: Array.isArray(res.data) ? res.data : [],
-          }));
+          newComments[p.id] = Array.isArray(res.data) ? res.data : [];
         } catch (error) {
           console.error("Error fetching comments:", error);
         }
       }
+      
+      setComments(newComments);
     };
   
     fetchAllComments();
-  }, [post]);
-
-  // useEffect(() => {
-  //   if (!isAuthenticated) {
-  //     navigation("/login", { replace: true });
-  //   }
-  // }, [isAuthenticated, navigation]);
+  }, [posts]); // Only depend on posts array
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget as HTMLFormElement;
     const formData = Object.fromEntries(new FormData(form));
     try {
-      const res = await axios.post("http://localhost:8000/posts", {
+      await axios.post("http://localhost:8000/posts", {
         title: formData.title,
         body: formData.body,
         user: user,
       });
-      setPost((prevPost) => [...prevPost, res.data]);
+      
+      // Trigger refresh instead of updating state directly
+      setRefreshTrigger(prev => prev + 1);
       form.reset();
     } catch (error) {
       console.log("Error Uploading the Post");
@@ -81,7 +110,7 @@ function Posts() {
   }
 
   async function handleEditPost(postId: number) {
-    const postToEdit = post.find((p) => p.id === postId);
+    const postToEdit = posts.find((p) => p.id === postId);
     if (postToEdit) {
       setEditingPost(postToEdit);
       setEditTitle(postToEdit.title);
@@ -102,7 +131,8 @@ function Posts() {
         }
       );
 
-      setPost((prevPosts) =>
+      // Update the post locally
+      setPosts((prevPosts) =>
         prevPosts.map((p) =>
           p.id === editingPost.id
             ? { ...p, title: editTitle, body: editBody }
@@ -133,7 +163,8 @@ function Posts() {
           },
         }
       );
-      setPost((prevPosts) => prevPosts.filter((p) => p.id !== postId));
+      // Remove the post locally without refetching
+      setPosts((prevPosts) => prevPosts.filter((p) => p.id !== postId));
     } catch (error) {
       console.error("Error deleting post:", error);
     }
@@ -148,12 +179,14 @@ function Posts() {
         }
       );
 
-      setPost((prevPosts) =>
+      // Update post likes count in the local state
+      setPosts((prevPosts) =>
         prevPosts.map((p) =>
           p.id === postId ? { ...p, likesCount: response.data.likesCount } : p
         )
       );
 
+      // Update the liked status locally
       if (response.data.liked) {
         setLikedPosts((prev) => [...prev, postId]);
       } else {
@@ -301,7 +334,7 @@ function Posts() {
     ));
   };
 
-  const posts = post.map((item) => (
+  const postsList = posts.map((item) => (
     <div key={item.id} className="mb-8 bg-gray-900 rounded-xl shadow-lg overflow-hidden">
       {editingPost && editingPost.id === item.id ? (
         <div className="p-6">
@@ -371,7 +404,7 @@ function Posts() {
                 }`}
               >
                 <FaThumbsUp size={14} />
-                <span>{item.likesCount || 0}</span>
+                <span>{item.likesCount}</span>
               </button>
               
               <button
@@ -494,14 +527,6 @@ function Posts() {
         
         <div className="flex items-center mb-6">
           <h2 className="text-2xl font-bold text-indigo-400">Posts</h2>
-          <div className="ml-auto flex items-center gap-2">
-            <span className="text-sm text-gray-400">Sort by:</span>
-            <select className="bg-gray-800 text-white border border-gray-700 rounded-lg px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-              <option>Latest</option>
-              <option>Most liked</option>
-              <option>Most commented</option>
-            </select>
-          </div>
         </div>
         
         {posts.length === 0 ? (
@@ -510,7 +535,7 @@ function Posts() {
           </div>
         ) : (
           <div className="space-y-6">
-            {posts}
+            {postsList}
           </div>
         )}
       </div>
