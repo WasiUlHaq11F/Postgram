@@ -56,7 +56,7 @@ function Auth() {
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-50 w-full">
+    <div className="flex items-center justify-center min-h-screen w-full">
       <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-xl shadow-lg">
         <div className="text-center">
           <div className="mx-auto bg-orange-100 rounded-full p-3 w-12 h-12 flex items-center justify-center">

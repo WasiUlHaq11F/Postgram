@@ -1,6 +1,8 @@
-import {Column, BaseEntity, PrimaryGeneratedColumn, Entity, OneToMany} from "typeorm"
+// Updated User Entity
+import {Column, BaseEntity, PrimaryGeneratedColumn, Entity, OneToMany, ManyToMany, JoinTable} from "typeorm"
 import {Post} from "../entities/Post"
 import { Comment } from "./Comment"
+
 @Entity('user')
 export class User extends BaseEntity {
 
@@ -31,4 +33,11 @@ export class User extends BaseEntity {
         comment => comment.author
     )
     comments: Comment[]
+
+    // This is the fixed relationship configuration for liked posts
+    // Note: We removed the @JoinTable from here since it belongs on the owning side
+    @ManyToMany(() => Post)
+    @JoinTable() // You need this for many-to-many relationships
+    likedPosts: Post[];
+  
 }

@@ -1,6 +1,6 @@
 
 import express from "express"
-import { createConnection } from "typeorm"
+import { createConnection, Like } from "typeorm"
 import { User } from "./entities/User"
 import { Post } from "./entities/Post"
 import { Comment } from "./entities/Comment"
@@ -11,6 +11,8 @@ import { postRouter } from "./controllers/postContoller"
 import commentRouter from "./controllers/commentController"
 import { logoutRouter } from "./controllers/logoutcontroller"
 import cookieParser from "cookie-parser"
+import { authenticateUser } from "./controllers/commentController";
+
 const main = async () => {
     const app = express()
 
@@ -22,7 +24,7 @@ const main = async () => {
             database: "Postgram",
             username: "postgres",
             password: "1234567",
-            entities:[User,Post,Comment],
+            entities:[User,Post,Comment,Like],
             synchronize: true,
         })
 
@@ -35,6 +37,7 @@ const main = async () => {
         app.use('/register',registerRouter)
         app.use('/login',loginRouter)
         app.use('/comments',commentRouter)
+        app.use('/comments', authenticateUser, commentRouter);
         app.use('/posts',postRouter)
         app.use('/logout',logoutRouter)
         console.log("Connected to Postgres")

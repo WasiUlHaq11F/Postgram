@@ -4,7 +4,13 @@ const logoutRouter = express.Router();
 
 logoutRouter.post('/', async (req, res): Promise<any> => {
   // Clear the JWT cookie
-  res.clearCookie('jwt', {
+  res.clearCookie('access_token', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    path: '/'           // ✅ Make sure this is included
+  });
+  res.clearCookie('refresh_token', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict'

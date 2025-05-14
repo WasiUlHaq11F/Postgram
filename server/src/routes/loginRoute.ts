@@ -38,14 +38,35 @@ loginRouter.post('/',async (req,res): Promise<any> => {
 
         //setup jwts. 
         const secret = process.env.JWT_SECRET as string
-        const token = jwt.sign({userid:user.user_id}, secret, {expiresIn:'1hr'})
+    
 
-        res.cookie('jwt', token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
-            maxAge: 60 * 60 * 1000
-        });
+            const accessToken = jwt.sign(
+                { userid: user.user_id },
+                secret,
+                { expiresIn: '15m' }
+            );
+        
+            const refreshToken = jwt.sign(
+                { userid: user.user_id },
+               secret,
+                { expiresIn: '7d' }
+            );
+          
+              // Set refresh token cookie (long-lived)
+              res.cookie('refresh_token', refreshToken, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'strict',
+                maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+              });
+              
+              res.cookie('access_token', accessToken, {
+                    httpOnly: true,
+                    secure: process.env.NODE_ENV === 'production',
+                    sameSite: 'strict',
+                    maxAge: 60 * 60 * 1000
+                });
+
     return res.status(200).json({
         "success": true,
          user : {

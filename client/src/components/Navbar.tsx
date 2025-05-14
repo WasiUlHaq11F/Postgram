@@ -30,7 +30,7 @@ function Navbar() {
   };
 
   return (
-    <nav className="w-full bg-gray-800 text-white shadow-md p-4 flex justify-between items-center">
+    <nav className="w-full text-white shadow-md p-4 flex justify-between items-center">
       <h1 className="text-3xl font-bold">Postgram</h1>
 
       <div className="flex flex-col items-end space-y-2">

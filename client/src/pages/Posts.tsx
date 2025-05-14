@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { FaThumbsUp, FaTrash, FaReply, FaComment } from "react-icons/fa6";
 import type { commentTypes, postTypes } from "../types/PostTypes";
-import { useNavigate } from "react-router";
+
 
 function Posts() {
   const { user, isAuthenticated } = useAuth();
@@ -12,57 +12,37 @@ function Posts() {
   const [editingPost, setEditingPost] = useState<postTypes | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editBody, setEditBody] = useState("");
-  const [likedPosts, setLikedPosts] = useState<number[]>([]);
+  const [likedPostIds, setLikedPostIds] = useState<number[]>([]);
   const [showCommentForm, setShowCommentForm] = useState<{ [key: number]: boolean }>({});
   const [replyingTo, setReplyingTo] = useState<number | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const navigation = useNavigate();
 
+
+  // Fetch posts and liked posts data
   useEffect(() => {
-    async function fetchAllPosts() {
-      setLoading(true);
+    async function fetchInitialData() {
       try {
-        // Fetch all posts
-        const res = await axios.get("http://localhost:8000/posts");
-        
-        // Ensure all posts have a likesCount (default to 0 if missing)
-        interface PostWithLikeCounts extends postTypes {
-          likesCount: number;
-        }
-
-        const postsWithLikeCounts: PostWithLikeCounts[] = res.data.map((post: postTypes) => ({
-          ...post,
-          likesCount: typeof post.likesCount === 'number' ? post.likesCount : 0
-        }));
-        
-        setPosts(postsWithLikeCounts);
-        
-        // Then fetch liked status if authenticated
-        if (isAuthenticated) {
-          try {
-            const likedResponse = await axios.get("http://localhost:8000/posts/liked", {
-              headers: {
-                Authorization: `Bearer ${localStorage.getItem("token")}`,
-              },
-            });
-            
-            if (Array.isArray(likedResponse.data)) {
-              setLikedPosts(likedResponse.data);
-            }
-          } catch (error) {
-            console.error("Error fetching liked posts:", error);
-          }
+        // Fetch posts
+        const postsRes = await axios.get("http://localhost:8000/posts");
+        setPosts(postsRes.data);
+  
+        // Fetch liked posts
+        if (user) {
+          const likedPostsRes = await axios.get(`http://localhost:8000/posts/${user.user_id}/liked`, {
+            withCredentials: true, 
+          });
+          // Extract just the IDs from the liked posts response
+          const likedIds = likedPostsRes.data.map((post: any) => post.id);
+          setLikedPostIds(likedIds);
         }
       } catch (error) {
-        console.error("Error fetching posts:", error);
-      } finally {
-        setLoading(false);
+        console.error("Error fetching posts or liked posts:", error);
       }
     }
   
-    fetchAllPosts();
-  }, [refreshTrigger, isAuthenticated]);
+    fetchInitialData();
+  }, [refreshTrigger, isAuthenticated, user]); // Include user in dependency array to refetch when user changes
+
   // Fetch comments when posts change
   useEffect(() => {
     if (posts.length === 0) return;
@@ -73,9 +53,7 @@ function Posts() {
       for (const p of posts) {
         try {
           const res = await axios.get(`http://localhost:8000/comments/${p.id}`, {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
-            },
+           withCredentials:true
           });
           newComments[p.id] = Array.isArray(res.data) ? res.data : [];
         } catch (error) {
@@ -87,7 +65,7 @@ function Posts() {
     };
   
     fetchAllComments();
-  }, [posts]); // Only depend on posts array
+  }, [posts]); 
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -128,6 +106,11 @@ function Posts() {
           title: editTitle,
           body: editBody,
           user: user,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
         }
       );
 
@@ -158,9 +141,7 @@ function Posts() {
     try {
       await axios.delete(`http://localhost:8000/posts/${postId}`,
         {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
+          withCredentials:true
         }
       );
       // Remove the post locally without refetching
@@ -172,39 +153,47 @@ function Posts() {
 
   async function handleLikePost(postId: number) {
     try {
+      // Check if the post is already liked
+      const isLiked = likedPostIds.includes(postId);
+  
       const response = await axios.post(
         `http://localhost:8000/posts/${postId}/like`,
         {
           user: user,
+        },
+        {
+          withCredentials: true,
         }
       );
-
-      // Update post likes count in the local state
+  
+      // Update the post likes count in the local state
       setPosts((prevPosts) =>
         prevPosts.map((p) =>
           p.id === postId ? { ...p, likesCount: response.data.likesCount } : p
         )
       );
-
-      // Update the liked status locally
-      if (response.data.liked) {
-        setLikedPosts((prev) => [...prev, postId]);
-      } else {
-        setLikedPosts((prev) => prev.filter((id) => id !== postId));
+  
+      // Update the likedPosts state
+      if (response.data.liked && !isLiked) {
+        // Like the post
+        setLikedPostIds((prev) => [...prev, postId]);
+      } else if (!response.data.liked && isLiked) {
+        // Unlike the post
+        setLikedPostIds((prev) => prev.filter((id) => id !== postId));
       }
     } catch (error) {
-      console.error("Error liking post:", error);
+      console.error("Error liking/unliking post:", error);
     }
   }
-
+  
   const isPostLiked = (postId: number) => {
-    return likedPosts.includes(postId);
+    return likedPostIds.includes(postId);
   };
 
   const handleDeleteComment = async (postId: number, commentId: number) => {
     try {
       await axios.delete(`http://localhost:8000/comments/${commentId}`, {
-        withCredentials: true,
+       withCredentials: true
       });
       
       setComments(prev => ({
@@ -235,7 +224,7 @@ function Posts() {
           user
         },
         {
-          withCredentials: true
+         withCredentials:true
         }
       );
       
@@ -286,12 +275,14 @@ function Posts() {
             <FaReply size={12} /> Reply
           </button>
           
-          <button
-            onClick={() => handleDeleteComment(postId, comment.id)}
-            className="flex items-center gap-1 text-xs px-2 py-1 bg-red-900 text-red-200 rounded hover:bg-red-800 transition-colors"
-          >
-            <FaTrash size={12} /> Delete
-          </button>
+          {user && comment.author.email === user.email && (
+            <button
+              onClick={() => handleDeleteComment(postId, comment.id)}
+              className="flex items-center gap-1 text-xs px-2 py-1 bg-red-900 text-red-200 rounded hover:bg-red-800 transition-colors"
+            >
+              <FaTrash size={12} /> Delete
+            </button>
+          )}
         </div>
         
         {replyingTo === comment.id && (
@@ -399,12 +390,15 @@ function Posts() {
                 onClick={() => handleLikePost(item.id)}
                 className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
                   isPostLiked(item.id)
-                    ? "bg-indigo-700 text-white hover:bg-indigo-800"
+                    ? "bg-indigo-600 text-white hover:bg-indigo-700 shadow-md shadow-indigo-500/50"
                     : "bg-gray-800 text-gray-300 hover:bg-gray-700"
                 }`}
               >
-                <FaThumbsUp size={14} />
-                <span>{item.likesCount}</span>
+                <FaThumbsUp 
+                  size={14} 
+                  className={isPostLiked(item.id) ? "text-white" : "text-gray-400"} 
+                />
+                <span>{item.likesCount || 0}</span>
               </button>
               
               <button
@@ -415,20 +409,24 @@ function Posts() {
                 <span>Comment</span>
               </button>
               
-              <button
-                onClick={() => handleEditPost(item.id)}
-                className="flex items-center gap-2 px-3 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors"
-              >
-                <span>Edit</span>
-              </button>
-              
-              <button
-                onClick={() => handleDelete(item.id)}
-                className="flex items-center gap-2 px-3 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors"
-              >
-                <FaTrash size={14} />
-                <span>Delete</span>
-              </button>
+              {user && item.authorEmail === user.email && (
+                <>
+                  <button
+                    onClick={() => handleEditPost(item.id)}
+                    className="flex items-center gap-2 px-3 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors"
+                  >
+                    <span>Edit</span>
+                  </button>
+                  
+                  <button
+                    onClick={() => handleDelete(item.id)}
+                    className="flex items-center gap-2 px-3 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors"
+                  >
+                    <FaTrash size={14} />
+                    <span>Delete</span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
           
@@ -478,7 +476,7 @@ function Posts() {
   ));
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white w-full">
+    <div className="min-h-screen text-white w-full">
       <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="mb-10 bg-gray-900 rounded-xl shadow-lg overflow-hidden">
           <div className="p-6">
