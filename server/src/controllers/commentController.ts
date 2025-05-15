@@ -5,32 +5,11 @@ import { User } from '../entities/User';
 import { getRepository } from 'typeorm';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
-
-dotenv.config();
+import { getUserFromToken } from '../middleware/authenticateUser';
 const commentRouter = express.Router();
 
-// Helper to extract user from token in cookies
-const getUserFromToken = async (req: Request): Promise<User | null> => {
-  const token = req.cookies.access_token;
-  console.log('JWT Token:', token); // See if token exists
-  if (!token) return null;
-
-  try {
-    const secret = process.env.JWT_SECRET as string;
-    const decoded: any = jwt.verify(token, secret);
-    console.log('Decoded JWT:', decoded); // See what's in the token
-    console.log('Looking for user with user_id:', decoded.userid);
-    
-    const user = await User.findOne({ where: { user_id: decoded.userid } });
-    console.log('Found user:', user); // Check if user was found
-    return user || null;
-  } catch (error) {
-    console.error('JWT verification error:', error);
-    return null;
-  }
-};
 // GET comments for a post
-commentRouter.get('/:postId', async (req: Request, res: Response): Promise<any> => {
+commentRouter.get('/:postId',  async (req: Request, res: Response): Promise<any> => {
   const postId = parseInt(req.params.postId);
 
   try {
@@ -206,7 +185,7 @@ const authenticateUser = async (req: Request, res: Response,next:NextFunction):P
       res.cookie('access_token', newAccessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        maxAge: 60 * 60 * 1000, // 1 hour
+        maxAge: 60 * 60 * 1000, 
       });
 
     } catch (refreshError) {
@@ -214,7 +193,6 @@ const authenticateUser = async (req: Request, res: Response,next:NextFunction):P
     }
   }
 
-  // Attach the user to the request object for further processing
   next();
 };
 

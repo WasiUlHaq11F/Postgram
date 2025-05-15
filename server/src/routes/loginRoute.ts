@@ -1,89 +1,68 @@
-import { User } from "../entities/User"
-import jwt from "jsonwebtoken"
-import express from "express"
-import bcrypt from "bcrypt"
+import { User } from "../entities/User";
+import jwt from "jsonwebtoken";
+import express from "express";
+import bcrypt from "bcrypt";
 import { getRepository } from "typeorm";
-import * as dotenv from 'dotenv';
+import * as dotenv from "dotenv";
 dotenv.config();
 
 const loginRouter = express.Router();
 
+loginRouter.post('/', async (req, res): Promise<any> => {
+  const { email, password } = req.body;
 
+  try {
+    const userRepo = getRepository(User);
+    const user = await userRepo.findOne({ where: { email } });
+    if (!user) {
+      return res.status(404).json({ message: "User not Found" });
+    }
 
-loginRouter.post('/',async (req,res): Promise<any> => {
+    // **Make sure to await** bcrypt.compare
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
 
-    const {email,password} = req.body
+    // **Generate tokens** (use separate secrets if you like)
+    const accessToken = jwt.sign(
+      { userid: user.user_id },
+      process.env.JWT_SECRET as string,
+      { expiresIn: '15m' }
+    );
+    const refreshToken = jwt.sign(
+      { userid: user.user_id },
+      process.env.JWT_REFRESH_SECRET as string,
+      { expiresIn: '7d' }
+    );
 
-   try{
+    // **Set cookies for cross‑origin** on localhost
+    res.cookie('access_token', accessToken, {
+      httpOnly: true,
+      secure: true,      
+      sameSite: 'lax',   
+      maxAge: 60 * 60 * 1000, 
+    });
 
-        const userRepo = getRepository(User);
-        const user = await userRepo.findOne({
-            where: {email}
-        });
-        if(!user){
-            return res.status(404).json({
-                "message": "User not Found"
-            })
-        }
-
-        // match passwords.
-
-        const isMatch = bcrypt.compare(password,user.password)
-        if(!isMatch){
-            return res.status(404).json({
-                "message": "Error! User not found"
-            })
-        }
-
-
-        //setup jwts. 
-        const secret = process.env.JWT_SECRET as string
-    
-
-            const accessToken = jwt.sign(
-                { userid: user.user_id },
-                secret,
-                { expiresIn: '15m' }
-            );
-        
-            const refreshToken = jwt.sign(
-                { userid: user.user_id },
-               secret,
-                { expiresIn: '7d' }
-            );
-          
-              // Set refresh token cookie (long-lived)
-              res.cookie('refresh_token', refreshToken, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'strict',
-                maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-              });
-              
-              res.cookie('access_token', accessToken, {
-                    httpOnly: true,
-                    secure: process.env.NODE_ENV === 'production',
-                    sameSite: 'strict',
-                    maxAge: 60 * 60 * 1000
-                });
+    res.cookie('refresh_token', refreshToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000, 
+    });
 
     return res.status(200).json({
-        "success": true,
-         user : {
-            user_id: user.user_id,
-            email: user.email
-         }
-    })
+      success: true,
+      user: {
+        user_id: user.user_id,
+        email: user.email
+      }
+    });
 
+  } catch (error) {
+    console.error("Login Error:", error);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
 
-   }catch(error){
-    console.error("Error: ", error)
-    return res.status(500).json({
-        "message ": "Login Failed, Internal Server Error!"
-    })
-   }
-
-})
-
-
-export {loginRouter,}
+export { loginRouter };

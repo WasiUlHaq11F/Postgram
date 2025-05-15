@@ -20,7 +20,6 @@ export class User extends BaseEntity {
 
     // relationships. 
     // A user has One to Many relation with a Post. 
-
     @OneToMany(
         () => Post,
         post=> post.author
@@ -34,8 +33,7 @@ export class User extends BaseEntity {
     )
     comments: Comment[]
 
-    // This is the fixed relationship configuration for liked posts
-    // Note: We removed the @JoinTable from here since it belongs on the owning side
+
     @ManyToMany(() => Post)
     @JoinTable() // You need this for many-to-many relationships
     likedPosts: Post[];

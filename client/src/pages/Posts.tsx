@@ -23,7 +23,9 @@ function Posts() {
     async function fetchInitialData() {
       try {
         // Fetch posts
-        const postsRes = await axios.get("http://localhost:8000/posts");
+        const postsRes = await axios.get("http://localhost:8000/posts", {
+          withCredentials:true
+        });
         setPosts(postsRes.data);
   
         // Fetch liked posts
@@ -76,6 +78,8 @@ function Posts() {
         title: formData.title,
         body: formData.body,
         user: user,
+      }, {
+        withCredentials:true
       });
       
       // Trigger refresh instead of updating state directly
@@ -108,9 +112,7 @@ function Posts() {
           user: user,
         },
         {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
+          withCredentials: true
         }
       );
 

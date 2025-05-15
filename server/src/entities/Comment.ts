@@ -2,8 +2,6 @@ import {Column, BaseEntity, PrimaryGeneratedColumn, Entity, CreateDateColumn, Up
 import { Post } from "./Post"
 import { User } from "./User"
 
-
-
 @Entity('comments')
 export class Comment extends BaseEntity {
 

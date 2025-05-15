@@ -1,4 +1,3 @@
-
 import express from "express"
 import { createConnection, Like } from "typeorm"
 import { User } from "./entities/User"
@@ -11,7 +10,7 @@ import { postRouter } from "./controllers/postContoller"
 import commentRouter from "./controllers/commentController"
 import { logoutRouter } from "./controllers/logoutcontroller"
 import cookieParser from "cookie-parser"
-import { authenticateUser } from "./controllers/commentController";
+import { authenticateUser } from "./middleware/authenticateUser"; // Correct import path
 
 const main = async () => {
     const app = express()
@@ -28,28 +27,35 @@ const main = async () => {
             synchronize: true,
         })
 
-        app.use(cors( { 
-            origin: " http://localhost:5173",
-            credentials: true
+        app.use(cors({ 
+            origin: "http://localhost:5173", // Removed the space before the URL
+            credentials: true,
+            methods: ['GET', 'POST', 'PUT', 'DELETE'], // Include all methods you use
+            allowedHeaders: ['Content-Type', 'Authorization']
         }))
+        
         app.use(cookieParser())
         app.use(express.json())
-        app.use('/register',registerRouter)
-        app.use('/login',loginRouter)
-        app.use('/comments',commentRouter)
-        app.use('/comments', authenticateUser, commentRouter);
-        app.use('/posts',postRouter)
-        app.use('/logout',logoutRouter)
+        
+  
+        // Public routes
+        app.use('/register', registerRouter)
+        app.use('/login', loginRouter)
+        app.use('/logout', logoutRouter)
+        
+        // Protected routes - apply authentication middleware
+        app.use('/comments', authenticateUser, commentRouter)  
+        app.use('/posts', authenticateUser, postRouter) 
+        
         console.log("Connected to Postgres")
         app.listen(8000, () => {
             console.log("Server running on Port 8000");
         })
     }
     catch(error){
-        console.error("Unable to connect to databse")
+        console.error("Unable to connect to database")
         console.log(error)
     }
-
 }
 
 main()

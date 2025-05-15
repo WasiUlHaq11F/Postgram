@@ -6,59 +6,38 @@ import { Comment } from "../entities/Comment";
 import jwt from 'jsonwebtoken'; 
 const postRouter = express.Router();
 
-
-
-const getUserFromToken = async (req: express.Request): Promise<User | null> => {
-  const token = req.cookies.access_token
-                 
-  if (!token) return null;
-
+postRouter.post('/', async (req, res):Promise<any> => {
   try {
-    const secret = process.env.JWT_SECRET as string;
-    if (!secret) {
-      console.error('JWT_SECRET is not defined in environment variables');
-      return null;
-    }
-    
-    const decoded: any = jwt.verify(token, secret);
-    console.log('Looking for user with user_id:', decoded.userid || decoded.user_id);
-    
-    const userId = decoded.userid || decoded.user_id;
-    const user = await User.findOne({ where: { user_id: userId } });
-    console.log('Found user:', user);
-    return user || null;
+      const { title, body } = req.body;
+      
+      // Get authenticated user from the request object (set by middleware)
+      const user = req.user;
+      if (!user) {
+          return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      // Create new post
+      const post = new Post();
+      post.title = title;
+      post.body = body;
+      post.author = user; // Assign the entire user object, not just the ID
+
+      await post.save();
+
+      const response = {
+          id: post.id,
+          title: post.title,
+          body: post.body,
+          authorEmail: user.email
+      };
+      
+      res.json(response);
   } catch (error) {
-    console.error('JWT verification error:', error);
-    return null;
+      console.error("Error creating post:", error);
+      res.status(500).json({ message: "Failed to create post" });
   }
-};
+});
 
-
-
-postRouter.post('/',async (req,res) => {
-    const {title,body,user} = req.body;
-
-    // add this post to the Postgres 
-    const post = new Post();
-    post.title = title;
-    post.body = body;
-    post.author= user.user_id
-
-   await post.save();
-
-   const response = [post]
-   .filter(post => post.author !== null)
-   .map(post => ({
-       id: post.id,
-       title: post.title,
-       body: post.body,
-       authorEmail: post.author.email
-   }));
-    res.json(response);
-
- 
-    
-})
 
 postRouter.get('/', async (req,res) => {
 
@@ -311,52 +290,7 @@ postRouter.delete('/:id', async (req: express.Request, res: express.Response): P
     }
   });
   
-  // Add a debugging endpoint to check what's happening with the tables
-  postRouter.get('/debug/like-tables', async (req, res):Promise<any> => {
-    try {
-      // Get the database connection from TypeORM
-      const connection = getRepository(Post).manager.connection;
-      
-      // Get all tables in the database
-      const tables = await connection.query(`
-        SELECT table_name 
-        FROM information_schema.tables 
-        WHERE table_schema = 'public'
-      `);
-      
-      // Check if your join table exists
-      const joinTableName = "post_likes"; // or "posts_liked" if that's the actual name
-      const tableExists = tables.some((t: { table_name: string }) => t.table_name === joinTableName);
-      
-      if (!tableExists) {
-        return res.status(404).json({ 
-          message: `Join table '${joinTableName}' does not exist`,
-          allTables: tables.map((t: { table_name: string }) => t.table_name)
-        });
-      }
-      
-      // Query the join table structure
-      const tableStructure = await connection.query(`
-        SELECT column_name, data_type 
-        FROM information_schema.columns 
-        WHERE table_name = '${joinTableName}'
-      `);
-      
-      // Get sample data from the join table
-      const sampleData = await connection.query(`
-        SELECT * FROM ${joinTableName} LIMIT 10
-      `);
-      
-      return res.json({
-        tableExists,
-        tableName: joinTableName,
-        structure: tableStructure,
-        sampleData
-      });
-    } catch (error: any) {
-      console.error('Error debugging like tables:', error);
-      return res.status(500).json({ message: 'Failed to debug like tables', error: error.message });
-    }
-  });
+ 
 
 export {postRouter}
+
